@@ -1,0 +1,21 @@
+import { test, expect } from 'bun:test';
+import { createTestRenderer } from '@opentui/core/testing';
+import { mount } from './app';
+test('spectator, rules editor, file ignore and arm controls', async () => {
+ const t=await createTestRenderer({width:100,height:30});
+ const sent:any[]=[];const app=mount(t.renderer,v=>sent.push(v),()=>{});
+ const config={targets:['all'],makefile:'Makefile',exec:'',ignores:[],interval:300,debounce:200};
+ app.receive({type:'ready',root:'/project',active:false,config,files:[{path:'src/main.c',size:42,ignored:false}]});
+ await t.renderOnce();
+ expect(t.captureCharFrame()).toContain('SPECTATOR');
+ expect(t.captureCharFrame()).toContain('src/main.c');
+ await t.mockInput.pressKey('x');
+ expect(sent.at(-1).config.ignores).toEqual(['src/main.c']);
+ await t.mockInput.pressKey('a');expect(sent.at(-1).cmd).toBe('arm');
+ await t.mockInput.pressKey('t');await t.renderOnce();
+ expect(t.captureCharFrame()).toContain('targets — Enter apply');
+ await t.mockInput.pressKey('ESCAPE');
+ await t.mockInput.pressKey('TAB');await t.mockInput.pressKey('TAB');await t.renderOnce();
+ expect(t.captureCharFrame()).toContain('Makefile');
+ await t.dispose();
+});

@@ -1,0 +1,24 @@
+{
+  "name": "trphot-ui",
+  "version": "0.1.0",
+  "description": "OpenTUI cockpit for the TrpHot Rust engine",
+  "directories": {
+    "example": "examples",
+    "test": "tests"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "bun test ui/app.test.ts"
+  },
+  "license": "MIT",
+  "type": "commonjs",
+  "dependencies": {
+    "@opentui/core": "0.8.1"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.4",
+    "bun": "^1.4.4",
+    "typescript": "^5.9.3"
+  },
+  "private": true
+}
