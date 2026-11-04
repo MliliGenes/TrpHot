@@ -5,8 +5,7 @@ test:
 	cargo test --locked
 	cargo build --locked
 	python3 tests/integration.py
-	./node_modules/.bin/tsc --noEmit
-	./node_modules/.bin/bun test ui/app.test.ts
+	python3 tests/web.py
 install:
 	./install.sh
 clean:

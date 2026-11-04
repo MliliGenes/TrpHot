@@ -2,7 +2,7 @@
 name = "trphot"
 version = "0.1.0"
 edition = "2021"
-description = "Watch, build, restart. A Rust engine with an OpenTUI cockpit."
+description = "Watch, build, restart. A Rust engine with a live web dashboard."
 license = "MIT"
 
 [dependencies]
@@ -12,3 +12,4 @@ serde_json = "1"
 globset = "0.4"
 signal-hook = "0.3"
 libc = "0.2"
+tiny_http = "0.12"

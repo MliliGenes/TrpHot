@@ -1,12 +1,12 @@
 # TrpHot
 
-**Watch. Build. Restart.** A Rust project watcher with a real OpenTUI cockpit.
+**Watch. Build. Restart.** A Rust project watcher with a live, local web dashboard.
 
-`trphot .` opens a spectator: browse files, see changes live, and configure rules before enabling builds. The engine runs independently of the interface; the CLI needs no JavaScript runtime.
+Run `trphot .` to inspect your project in the browser: watched files, live changes, build results, application output, and editable build rules. It starts in spectator mode, so no build commands execute until you enable automatic builds or click **Build now**.
 
 ## Install
 
-On Linux or macOS, install Make, Node.js/npm, and optionally Rust/Cargo, then:
+Requires Linux or macOS, Rust/Cargo, and Make for your project builds:
 
 ```sh
 ./install.sh
@@ -14,50 +14,91 @@ export PATH="$HOME/.local/bin:$PATH"
 trphot .
 ```
 
-The ZIP includes a static Linux x86_64 engine; no Rust compiler is required on that platform. Other platforms build from source using Cargo. The installer downloads pinned OpenTUI and a local Bun runtime using npm; internet access is needed for this step. No root privileges or global npm packages are required. Node 22+ is recommended for the installer. OpenTUI itself runs under the installed Bun, not Node. npm may report OpenTUI's Node engine requirement because your Node is older than 26.4; this does not affect the Bun runtime. If your npm configuration enforces `engine-strict`, use a supported Node version for installation.
+The dashboard is embedded in the Rust binary. No Node.js, Bun, or frontend installation is needed. Installation builds from source; the legacy binary in `bin/` predates the web dashboard.
 
-Use `PREFIX="$HOME/goinfre/apps/trphot" ./install.sh` for another prefix. Add that prefix's `bin` to PATH. Keep its `bin` and `share` directories together. To remove the default install, delete `~/.local/bin/trphot` and `~/.local/share/trphot`.
+Use `PREFIX="$HOME/apps/trphot" ./install.sh` for another prefix, then add its `bin` directory to your PATH. To uninstall, delete the installed `bin/trphot`. Older installations may also have a `share/trphot` directory that can be removed.
 
-## Commands
+## Use cases
+
+### Explore a project without running commands
 
 ```sh
-trphot .                                      # OpenTUI spectator; no builds
-trphot . --target all --exec './bin/app'        # Prefill TUI rules
-trphot . --run --target all                    # Automatic builds, plain terminal output
-trphot . --run --target all --exec './bin/app'  # Build and restart automatically
-trphot . --run --tui --exec './bin/app'         # Start armed inside the TUI
-trphot . --headless                            # Spectate without OpenTUI
-trphot . --once --target all                   # One build; exit with build result
-trphot . --once --exec './bin/app'              # One build; run until app exits
-trphot . --run --target generate --target all \
+trphot .
+```
+
+The browser opens a local dashboard. Search the file list, inspect changes as you edit, and configure targets, application commands, and ignore patterns before enabling builds. **Build now** runs a single build even in spectator mode.
+
+### Automatically rebuild and restart an application
+
+```sh
+trphot . --run --web --target all --exec './bin/app'
+```
+
+Build immediately, then rebuild after source changes and restart the application when the build succeeds. Follow compiler and application output in **Live activity**. A failed build keeps the previously running application alive.
+
+### Watch a library or build-only project
+
+```sh
+trphot . --run --web --target all
+```
+
+Omit `--exec` to run Make without launching an application. Add generated output directories to the ignore rules to prevent rebuild loops.
+
+### Use custom Make targets and generated files
+
+```sh
+trphot . --run --web --target generate --target all \
   --makefile dev.mk --ignore 'generated/**' --interval 500 --debounce 250
 ```
 
-`--run` enables automatic builds. `--exec` sets the application command; without it TrpHot only builds. Targets are passed to a single Make invocation. Use ordinary build targets, not an indefinitely running `make run`. All commands execute in the project directory. `--once` enables a build even without `--run`, then optionally waits for the executable. Nonzero build/application exits produce a nonzero TrpHot exit code in this mode.
+Targets are passed to one Make invocation, in the order supplied. All commands execute in the project directory. Use ordinary build targets rather than an indefinitely running `make run`.
 
-## TUI keys
+### Work in a terminal or automation script
 
-| Key | Action |
-| --- | --- |
-| Tab | Files / Activity / Rules |
-| Up / Down | Select a file or scroll activity/rules |
-| `/` | Filter the file list by path |
-| `x` | Ignore/unignore the selected file |
-| `t` | Edit space-separated Make targets |
-| `m` | Edit Makefile path |
-| `e` | Edit application command; empty means build only |
-| `g` | Add an ignore glob |
-| `c` in Rules | Clear custom ignore globs |
-| `i` / `d` | Edit polling interval / debounce in milliseconds |
-| `a` | Arm/disarm automatic builds |
-| `b` | Request a build now, including in spectator mode |
-| `p` | Pause/resume build scheduling |
-| `k` | Stop the current application |
-| `s` | Save current rules in the project |
-| `q` / Ctrl+C | Quit and stop managed processes |
-| Enter / Escape in a field | Apply / cancel editing |
+```sh
+trphot . --run --target all --exec './bin/app'  # Plain terminal output
+trphot . --headless                           # Watch without building
+trphot . --once --target all                  # One build, then exit
+trphot . --once --exec './bin/app'             # Build, then wait for app exit
+```
 
-Rule changes apply immediately in memory; press `s` to persist. Invalid values are rejected by the Rust engine. Editing a rule does not itself run a build. Disarming or pausing does not terminate a current build/app; `k` stops the application. Pending builds wait while paused. A file covered by a broad ignore glob must be unignored by clearing/replacing that rule, rather than the single-file toggle.
+`--once` returns a nonzero exit code if the build or application fails. `--run` uses plain terminal output unless `--web` is supplied.
+
+### View a remote project over SSH
+
+On the remote machine:
+
+```sh
+trphot . --port 8787 --no-open
+```
+
+On your local machine:
+
+```sh
+ssh -L 8787:127.0.0.1:8787 user@host
+```
+
+Open the complete dashboard URL printed by TrpHot, including its `#` token, in your local browser. The server binds only to `127.0.0.1`. By default it chooses an available port; `--port` provides a fixed port for forwarding.
+
+### Try the included C example
+
+```sh
+trphot examples/hello
+```
+
+Click **Enable auto-build**, then edit and save `examples/hello/main.c`. Watch the build and restarted application's output in the dashboard. The example requires a C compiler.
+
+## Dashboard controls
+
+- **Enable/Disable auto-build:** switch between automatic builds and spectator mode.
+- **Build now:** request a build using the current rules.
+- **Pause/Resume:** suspend or resume build scheduling.
+- **Stop app:** terminate the managed application.
+- **Apply rules:** validate and use edited rules for this session.
+- **Save current rules:** persist the engine's current rules to `.trphot.json`; apply edits first.
+- Filter activity by output, file changes, or engine messages; disable **Follow output** to read earlier logs.
+
+Changing rules does not itself trigger a build. Disabling auto-build or pausing does not terminate an existing build/application. Pending builds wait while paused. Closing or reloading the browser leaves the watcher running; press **Ctrl+C in the terminal** to stop it and its managed processes. The dashboard reconnects automatically while the engine is available.
 
 ## Saved configuration
 
@@ -74,47 +115,33 @@ Project-relative `.trphot.json`:
 }
 ```
 
-Missing fields use defaults. CLI options override saved values; repeated `--ignore` options append rules. Paths/globs are relative to the project root; `generated/**` excludes a directory. Save only when you want current CLI overrides to become project defaults. External configuration edits are loaded on the next launch.
+Missing fields use defaults. CLI options override saved values; repeated `--ignore` options append rules. Paths and globs are relative to the project root. External configuration edits are loaded on the next launch. Save current rules only when you want CLI overrides to become project defaults.
 
-Always excluded: `.git`, `node_modules`, `target`, `.trphot.json`, and its temporary save file. Symlinks are not followed. A directly executed relative program path (the first shell word) is automatically ignored to avoid rebuilding itself. For commands containing quoted paths with spaces, wrappers, redirects, generators or custom output paths, explicitly ignore their output. This is especially necessary in build-only mode: TrpHot cannot infer every output produced by an arbitrary Makefile.
+Always excluded: `.git`, `node_modules`, `target`, `.trphot.json`, and its temporary save file. Symlinks are not followed. A directly executed relative program path (the first shell word) is automatically ignored to avoid rebuilding itself. For commands with quoted paths, wrappers, redirects, or custom output locations, explicitly ignore generated output.
 
-## Lifecycle
+## How it works
 
-- Poll recursively, comparing file path, size, and modification timestamp. Detect additions, changes, and deletions.
-- Debounce edits; run at most one build at a time. Changes while building queue another build.
-- Build while the existing app continues running. Failed builds preserve it.
-- On success, terminate the old process group, wait briefly, kill remaining children if necessary, then launch the replacement.
-- Quit handles SIGINT, SIGTERM, SIGHUP, or interface disconnection and stops the build/application groups.
+- Poll recursively for changes in file paths, sizes, and modification timestamps.
+- Debounce edits and run at most one build at a time. Changes during a build queue another build.
+- Keep the old application running during builds; replace it only after success.
+- Stop process groups on exit, including SIGINT, SIGTERM, and SIGHUP.
 
-Polling detects saved files, not editor buffers. An edit that preserves both size and timestamp is not detectable. Scans are capped at 50,000 files: exclude large generated directories. Persistent scan errors appear in activity; resolve them before relying on automatic rebuilds. The interface keeps the latest 2,000 output lines, with long individual lines chunked by the engine. Child stdin is closed: interactive/full-screen applications are not supported in this version. Programs that detach into their own sessions are outside process-group cleanup.
+Polling detects saved files, not editor buffers. Edits preserving both size and timestamp are not detectable. Scans are capped at 50,000 files; exclude large generated directories. The dashboard retains the latest 2,000 activity events and shows up to 1,000 matching files at a time; use search to narrow the list. Scan errors appear in activity. Child stdin is closed, so interactive/full-screen applications are unsupported. Programs that detach into their own sessions are outside process-group cleanup.
 
-Only run projects and commands you trust: Make recipes and `--exec` intentionally execute project code. TrpHot never cleans project files or runs a clean target automatically.
+Make recipes and `--exec` execute project code. TrpHot never cleans project files or runs a clean target automatically. This is process restarting, not in-process code replacement. Windows is not currently supported.
 
-## Try the included example
+## Development
 
-```sh
-trphot examples/hello
-```
-
-Press `a` to build and start the C example, Tab to Activity, then edit `examples/hello/main.c` in another terminal. Save to rebuild and restart. Press `q` to stop.
-
-## Development and checks
-
-Requires Rust/Cargo, npm, Python 3, and Make. The example additionally needs a C compiler.
+Requires Rust/Cargo, Python 3, and Make. No JavaScript dependencies are needed.
 
 ```sh
-npm ci
 make test
-python3 tests/terminal.py   # Linux PTY check of the actual OpenTUI launcher
 cargo clippy -- -D warnings
 ```
 
-Architecture:
-
-- `src/main.rs`: CLI, configuration, polling scheduler, JSON-lines interface.
+- `src/main.rs`: CLI, configuration, polling scheduler, JSON-lines engine interface.
 - `src/watch.rs`: snapshots, ignore globs, change detection.
-- `src/process.rs`: Make/app jobs, bounded output channel, process-group cleanup.
-- `ui/app.ts`: OpenTUI files/activity/rules interface.
-- `ui/main.ts`: interface lifecycle and engine transport.
-
-OpenTUI: https://github.com/anomalyco/opentui — pinned to `@opentui/core` 0.8.1. The engine is Rust; OpenTUI's supported TypeScript API drives its Zig renderer. This is process restarting, not in-process code replacement. Windows is not currently supported.
+- `src/process.rs`: Make/app jobs, output channel, process-group cleanup.
+- `src/web.rs`: loopback HTTP server, authenticated commands, bounded dashboard state.
+- `web/`: embedded HTML, CSS, and JavaScript dashboard.
+- `tests/`: engine lifecycle and dashboard HTTP integration checks.

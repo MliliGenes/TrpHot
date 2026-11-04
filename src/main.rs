@@ -1,14 +1,13 @@
 #![cfg(unix)]
 mod process;
 mod watch;
+mod web;
 use clap::Parser;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::os::unix::process::CommandExt;
 use std::{
-    io::{self, BufRead, IsTerminal, Write},
+    io::{self, BufRead, Write},
     path::PathBuf,
-    process::Command,
     sync::{
         atomic::{AtomicBool, Ordering},
         mpsc, Arc,
@@ -19,7 +18,7 @@ use std::{
 #[derive(Parser, Debug)]
 #[command(
     version,
-    about = "TrpHot — watch, build, restart. No flags opens the OpenTUI spectator."
+    about = "TrpHot — watch, build, restart. No flags opens the web dashboard."
 )]
 struct Args {
     #[arg(default_value = ".")]
@@ -41,10 +40,16 @@ struct Args {
     interval: Option<u64>,
     #[arg(long)]
     debounce: Option<u64>,
-    /// Use the TUI even with --run
+    /// Open the web dashboard even with --run
     #[arg(long)]
-    tui: bool,
-    /// Watch without the TUI
+    web: bool,
+    /// Dashboard port (0 chooses an available port)
+    #[arg(long, default_value_t = 0)]
+    port: u16,
+    /// Print the dashboard URL without opening a browser
+    #[arg(long)]
+    no_open: bool,
+    /// Watch without the web dashboard
     #[arg(long)]
     headless: bool,
     /// Build once; optionally run the executable until it exits
@@ -104,6 +109,7 @@ impl Config {
     }
 }
 fn emit(protocol: bool, value: Value) {
+    web::publish(&value);
     if protocol {
         println!("{value}");
     } else {
@@ -132,37 +138,7 @@ fn main() {
 }
 fn start() -> Result<(), String> {
     let args = Args::parse();
-    if !args.engine && !args.headless && !args.once && (!args.run || args.tui) {
-        if !io::stdin().is_terminal() {
-            return Err("TUI needs a terminal. Use --headless for spectator output or --run for automatic builds.".into());
-        }
-        let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-        let installed = exe.parent().unwrap().join("../share/trphot");
-        let local = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        let base = std::env::var_os("TRPHOT_HOME")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| {
-                if installed.join("ui/main.ts").exists() {
-                    installed
-                } else {
-                    local
-                }
-            });
-        let bun = if base.join("node_modules/.bin/bun").exists() {
-            base.join("node_modules/.bin/bun")
-        } else {
-            PathBuf::from("bun")
-        };
-        let err = Command::new(bun)
-            .arg("run")
-            .arg(base.join("ui/main.ts"))
-            .args(std::env::args_os().skip(1))
-            .env("TRPHOT_ENGINE", exe)
-            .exec();
-        return Err(format!(
-            "cannot launch OpenTUI: {err}. Run ./install.sh first, or use --headless."
-        ));
-    }
+    let dashboard = !args.engine && !args.headless && !args.once && (!args.run || args.web);
     let root = args
         .dir
         .canonicalize()
@@ -199,6 +175,9 @@ fn start() -> Result<(), String> {
         signal_hook::flag::register(sig, stopped.clone()).map_err(|e| e.to_string())?;
     }
     let (tx, rx) = mpsc::sync_channel::<Value>(1024);
+    if dashboard {
+        web::start(args.port, !args.no_open, tx.clone())?;
+    }
     if args.engine {
         let t = tx.clone();
         std::thread::spawn(move || {
